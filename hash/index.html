@@ -1,0 +1,945 @@
+<html>
+
+<head>
+    <title>Path Drawing Tool</title>
+    <meta charset="utf-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Load third-party libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.5/lib/p5.js" type="text/javascript"></script>
+    <!-- Load our application code -->
+    <script>
+        let currentPath = [];
+        let allPaths = [];
+        let singlePoints = [];
+        let limitLenght = 2000;
+
+        let mouseStart = false;
+        let mouseEnd = false;
+
+        let dotLimit = 40;
+        let pathLimit = 30;
+
+        let isCanvasTouch = false;
+
+        function setup() {
+            const canvas = createCanvas(500, 500).parent('canvas-container');
+            textSize(12);
+            textAlign(LEFT, CENTER);
+            noFill();
+            strokeWeight(2);
+
+            // 防止手指拖拉時，視窗左右晃動
+            canvas.elt.addEventListener('touchmove', function (e) {
+                e.preventDefault();
+            }, { passive: false });
+            document.addEventListener("touchmove", preventBehavior, {
+                passive: false
+            });
+            // 不再自動調整 canvas 尺寸
+            // windowResized();
+
+            // document.addEventListener('touchstart', function (e) {
+            //     const canvas = document.querySelector('#canvas-container canvas');
+            //     if (!canvas) return;
+            //     const rect = canvas.getBoundingClientRect();
+            //     const touch = e.touches[0];
+            //     if (!touch) return;
+            //     // 判断触摸起点是否在canvas内
+            //     if (
+            //         touch.clientX >= rect.left && touch.clientX <= rect.right &&
+            //         touch.clientY >= rect.top && touch.clientY <= rect.bottom
+            //     ) {
+            //         isCanvasTouch = true;
+            //     } else {
+            //         isCanvasTouch = false;
+            //     }
+            // });
+            // document.addEventListener('touchmove', function (e) {
+            //     if (isCanvasTouch) {
+            //         e.preventDefault();
+            //     }
+            // }, { passive: false });
+            // document.addEventListener('touchend', function () {
+            //     isCanvasTouch = false;
+            // });
+        }
+
+
+        function preventBehavior(e) {
+            e.preventDefault();
+        }
+        function draw() {
+            background(230);
+
+            // 畫所有路徑與標註
+            for (let i = 0; i < allPaths.length; i++) {
+                drawPathWithLabels(allPaths[i], i);
+            }
+
+            // 畫獨立點
+            for (let i = 0; i < singlePoints.length; i++) {
+                let pt = singlePoints[i];
+                fill(0);
+                ellipse(pt.x, pt.y, 8, 8);
+                noStroke();
+                fill(255, 0, 0);
+                text(`Dot ${i + 1}`, pt.x + 5, pt.y);
+                stroke(0);
+            }
+
+            // 畫目前筆畫的點
+            if (mouseIsPressed) {
+                currentPath.push(createVector(mouseX, mouseY));
+                drawRawPoints(currentPath);
+            }
+        }
+
+        function drawRawPoints(path) {
+            if (path.length === 0) return;
+            // 畫起點
+            fill(255, 0, 0);
+            noStroke();
+            ellipse(path[0].x, path[0].y, 12, 12);
+
+            // 畫起點到滑鼠的線
+            stroke(255, 0, 0);
+            noFill();
+            if (mouseIsPressed) {
+                line(path[0].x, path[0].y, mouseX, mouseY);
+            }
+        }
+
+        function drawPathWithLabels(path, pathIndex) {
+            stroke(0);
+            noFill();
+            beginShape();
+            for (let i = 0; i < path.length; i++) {
+                let pt = path[i];
+                vertex(pt.x, pt.y);
+            }
+            endShape();
+
+            for (let i = 0; i < path.length; i++) {
+                let pt = path[i];
+                fill(0);
+                ellipse(pt.x, pt.y, 6, 6);
+                noStroke();
+                fill(50, 100, 200);
+                text(`P${pathIndex + 1}-${i}`, pt.x + 5, pt.y);
+                stroke(0);
+            }
+
+            let labelPos = path[0];
+            noStroke();
+            fill(255, 0, 0);
+            text(`Path ${pathIndex + 1}`, labelPos.x + 10, labelPos.y - 15);
+            stroke(0);
+        }
+
+        function mouseReleased() {
+            if (currentPath.length > 1) {
+                let totalLength = calculatePathLength(currentPath);
+                let totalAngle = calculateTotalAngle(currentPath);
+
+                if (totalLength < 20) {
+                    // 确保点在画布范围内(500x500)
+                    let pt = currentPath[0].copy();
+                    if (pt.x >= 0 && pt.x <= 500 && pt.y >= 0 && pt.y <= 500) {
+                        singlePoints.push(pt);
+                        // 新增：限制 singlePoints 最多 40 个
+                        if (singlePoints.length > dotLimit) {
+                            singlePoints.shift();
+                        }
+                        console.log(`添加独立点: (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+                    } else {
+                        console.log(`忽略画布范围外的点: (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+                    }
+                } else {
+                    let minPoints = 2;
+
+                    // 🔧 動態限制 maxPoints：短線最多只分 4~6 點
+                    let dynamicMax = floor(map(totalLength, 20, 500, 4, 12));
+                    let maxPoints = constrain(dynamicMax, minPoints, 12);
+
+                    let lengthFactor = map(totalLength, 20, 500, 0, 1);
+                    let angleFactor = map(totalAngle, 0, 720, 0, 1);
+                    let blend = lengthFactor * 0.5 + angleFactor * 0.5;
+
+                    let mappedCount = round(map(blend, 0, 1, minPoints, maxPoints));
+                    let pointCount = constrain(mappedCount, minPoints, maxPoints);
+
+                    let simplified = resamplePath(currentPath, pointCount);
+                    allPaths.push(simplified);
+                    // 新增：限制 allPaths 最多 30 条
+                    if (allPaths.length > pathLimit) {
+                        allPaths.shift();
+                    }
+                }
+            }
+            currentPath = [];
+        }
+
+        function calculatePathLength(path) {
+            let total = 0;
+            for (let i = 1; i < path.length; i++) {
+                total += p5.Vector.dist(path[i], path[i - 1]);
+            }
+            return total;
+        }
+
+        function calculateTotalAngle(path) {
+            let totalAngle = 0;
+            for (let i = 1; i < path.length - 1; i++) {
+                let v1 = p5.Vector.sub(path[i], path[i - 1]);
+                let v2 = p5.Vector.sub(path[i + 1], path[i]);
+
+                if (v1.mag() === 0 || v2.mag() === 0) continue; // 忽略無效向量
+
+                let angle = degrees(v1.angleBetween(v2));
+                if (!isNaN(angle)) {
+                    totalAngle += abs(angle);
+                }
+            }
+            return totalAngle;
+        }
+
+        function resamplePath(path, count) {
+            let totalLength = 0;
+            let distances = [];
+
+            for (let i = 1; i < path.length; i++) {
+                let d = p5.Vector.dist(path[i], path[i - 1]);
+                distances.push(d);
+                totalLength += d;
+            }
+
+            // ✅ 加入：如果接近直線，就直接回傳起點與終點
+            if (isAlmostStraight(path)) {
+                // console.log("接近直線");
+                return [path[0].copy(), path[path.length - 1].copy()];
+            }
+
+            let interval = totalLength / (count - 1);
+            let newPath = [];
+            let targetDist = 0;
+            let accumulated = 0;
+
+            for (let i = 1; i < path.length; i++) {
+                let segStart = path[i - 1];
+                let segEnd = path[i];
+                let d = distances[i - 1];
+
+                if (accumulated + d >= targetDist) {
+                    let t = (targetDist - accumulated) / d;
+                    let newPoint = p5.Vector.lerp(segStart, segEnd, t);
+                    let xx = Number(newPoint.x.toFixed(2));
+                    let yy = Number(newPoint.y.toFixed(2));
+                    newPoint.x = map(xx, 0, 500, 0, 500);
+                    newPoint.y = map(yy, 0, 500, 0, 500);
+                    newPath.push(newPoint);
+                    targetDist += interval;
+                    i--;
+                } else {
+                    accumulated += d;
+                }
+
+                if (newPath.length === count) break;
+            }
+
+            if (newPath.length < count) {
+                newPath.push(path[path.length - 1].copy());
+            }
+
+            return newPath;
+        }
+
+        function isAlmostStraight(path) {
+            let totalLength = calculatePathLength(path);
+            if (totalLength < limitLenght) return true; // ⭐ 長度短就直接視為直線
+
+            let totalAngle = calculateTotalAngle(path);
+            return totalAngle < 20 && path.length >= 3;
+        }
+
+        function keyPressed() {
+            if (keyCode === ENTER) {
+                let hashPart;
+                const result = generateURLFromData();
+                if (result && result.url) {
+                    const linkElement = document.getElementById('generated-link');
+                    hashPart = result.url.substring(result.url.indexOf('#data_'));
+                    linkElement.innerText = hashPart;
+                    linkElement.style.display = 'block';
+                    document.getElementById('copy-button').style.display = 'block';
+                    const seeButton = document.getElementById('see-button');
+                    seeButton.style.display = 'inline-block';
+                    seeButton.onclick = function () {
+                        // 每次都重新產生新的 seed 與網址
+                        const newResult = generateURLFromData();
+                        if (newResult && newResult.url) {
+                            const fixedUrl = newResult.url
+                              .replace(/%3D/gi, '=')
+                              .replace(/%2F/gi, '/')
+                              .replace(/%2B/gi, '+');
+                            window.open(fixedUrl, '_blank');
+                        }
+                    };
+                }
+
+            }
+        }
+
+        // 產生7位亂數英數字
+        function generateSeed(len = 7) {
+
+            let seed = '';
+
+            seed = Math.floor(Math.random() * 6000000 + 3000000);
+
+            return seed;
+        }
+
+        function generateURLFromData() {
+            // 1. 使用相对坐标格式压缩数据
+            let compressedPaths = allPaths.map(compressPath);
+            let compressedDots = [];
+
+            // 只有当有独立点时才压缩，并且过滤掉画布范围外的点
+            if (singlePoints && singlePoints.length > 0) {
+                // 过滤出画布范围内的点（画布大小为500x500）
+                const validSinglePoints = singlePoints.filter(p =>
+                    p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height
+                );
+
+                if (validSinglePoints.length < singlePoints.length) {
+                    console.log(`过滤掉${singlePoints.length - validSinglePoints.length}个画布范围外的点`);
+                }
+
+                if (validSinglePoints.length > 0) {
+                    compressedDots = validSinglePoints.map(p => [
+                        Number(p.x.toFixed(1)),
+                        Number(p.y.toFixed(1))
+                    ]);
+                    console.log(`压缩了${compressedDots.length}个独立点`);
+                } else {
+                    console.log('没有有效的独立点需要压缩');
+                }
+            } else {
+                console.log('没有独立点需要压缩');
+            }
+
+            let data = {
+                p: compressedPaths,
+                d: compressedDots
+            };
+
+            try {
+                // 准备不同的压缩方法，并选择最高效的结果
+                const jsonStr = JSON.stringify(data);
+
+                // 标准 base64 编码
+                const base64Str = btoa(jsonStr);
+                const base64Url = encodeURIComponent(base64Str);
+
+                // 使用自定义二进制格式压缩
+                const binaryStr = compressToBinary(data);
+                const binaryUrl = encodeURIComponent(binaryStr);
+
+                // 选择最短的压缩方法
+                let shortestStr = base64Url;
+                let compressionMethod = "base64";
+
+                if (binaryUrl.length < shortestStr.length) {
+                    shortestStr = binaryUrl;
+                    compressionMethod = "binary";
+                }
+
+                // 產生亂數種子
+                const seed = generateSeed(7);
+
+                // 構建 hash 部分，格式為 #data_xxx&seed_xxxxxxx
+                const hashPart = "#data_" + shortestStr + "&seed_" + seed;
+
+                // 根據本地或遠端決定 baseUrl
+                let baseUrl;
+                if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
+                    baseUrl = window.location.origin + "/";
+                } else if (window.location.hostname === "polypaths.up.railway.app") {
+                    baseUrl = "https://polypaths.up.railway.app/";
+                } else {
+                    baseUrl = "https://aluanwang.com/Polypaths/";
+                }
+                const completeURL = baseUrl + hashPart;
+
+                const totalLength = completeURL.length;
+                const charCount = completeURL.split('').length;
+
+                console.log(`🔗 網址長度：${totalLength} 字元 (${charCount} 個字符)`);
+                console.log(`📊 壓縮方式：${compressionMethod}`);
+                console.log(`📊 壓縮前JSON長度：${jsonStr.length} 字元`);
+                console.log(`📊 壓縮後URL參數長度：${shortestStr.length} 字元`);
+                console.log(`📊 壓縮比例：${Math.round((1 - shortestStr.length / jsonStr.length) * 100)}%`);
+
+                if (totalLength > 2000) {
+                    console.warn("⚠️ 這個網址太長了！有些瀏覽器可能會爆炸。");
+                    offerAlternatives();
+                } else if (totalLength > 1500) {
+                    console.warn("⚠️ 網址已偏長，請節制你那放飛自我的繪圖習慣。");
+                } else {
+                    // console.log("✅ 安全範圍內，恭喜你沒有畫滿一整本。");
+                }
+
+                console.log("🔗 請複製以下網址：\n" + completeURL);
+
+                // === 新增：產生資料後顯示按鈕 ===
+                const linkElement = document.getElementById('generated-link');
+                linkElement.innerText = completeURL
+                  .replace(/%3D/gi, '=')
+                  .replace(/%2F/gi, '/')
+                  .replace(/%2B/gi, '+');
+                linkElement.style.display = 'block';
+
+                const copyButton = document.getElementById('copy-button');
+                if (copyButton) copyButton.style.display = 'block';
+
+                const seeButton = document.getElementById('see-button');
+                const pushButton = document.getElementById('push-button');
+                const host = window.location.hostname;
+                if (seeButton) seeButton.style.display = 'none';
+                if (pushButton) pushButton.style.display = 'none';
+                if (host === 'localhost' || host === '127.0.0.1' || host.includes('aluanwang.com')) {
+                    if (seeButton) {
+                        seeButton.style.display = 'inline-block';
+                        seeButton.onclick = function () {
+                            // 只產生一次新 seed 與網址，直接開新分頁
+                            const newResult = generateURLFromData();
+                            if (newResult && newResult.url) {
+                                const fixedUrl = newResult.url
+                                  .replace(/%3D/gi, '=')
+                                  .replace(/%2F/gi, '/')
+                                  .replace(/%2B/gi, '+');
+                                window.open(fixedUrl, '_blank');
+                            }
+                        };
+                    }
+                } else if (host === 'polypaths.up.railway.app') {
+                    if (pushButton) {
+                        pushButton.style.display = 'inline-block';
+                        pushButton.onclick = function () {
+                            const newResult = generateURLFromData();
+                            if (newResult && newResult.url) {
+                                const hash = newResult.url.split('#')[1]
+                                    ? '#' + newResult.url.split('#')[1]
+                                        .replace(/%3D/gi, '=')
+                                        .replace(/%2F/gi, '/')
+                                        .replace(/%2B/gi, '+')
+                                    : '';
+                                fetch('https://postbotanybackend.up.railway.app/trigger-new-url', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ hash: hash })
+                                })
+                                    .then(res => {
+                                        if (!res.ok) throw new Error(res.statusText);
+                                        pushButton.textContent = 'success';
+                                        pushButton.classList.add('success');
+                                        pushButton.classList.remove('failed');
+                                        setTimeout(() => {
+                                            pushButton.textContent = 'Push';
+                                            pushButton.classList.remove('success');
+                                            pushButton.classList.remove('failed');
+                                        }, 3000);
+                                    })
+                                    .catch(err => {
+                                        pushButton.textContent = 'failed';
+                                        pushButton.classList.add('failed');
+                                        pushButton.classList.remove('success');
+                                        setTimeout(() => {
+                                            pushButton.textContent = 'Push';
+                                            pushButton.classList.remove('failed');
+                                            pushButton.classList.remove('success');
+                                        }, 3000);
+                                    });
+                            }
+                        };
+                    }
+                }
+                // === END ===
+
+                // 返回完整結構，供 see-button 使用
+                return { url: completeURL, hash: hashPart, baseUrl, seed };
+
+            } catch (err) {
+       
+                console.error(err);
+                return null;
+            }
+        }
+
+        // 压缩路径数据：使用相对坐标和减少精度
+        function compressPath(path) {
+            if (path.length < 2) return [];
+
+            // 将第一个点作为基准点，使用0位小数精度（四舍五入取整）
+            let startX = Math.round(path[0].x);
+            let startY = Math.round(path[0].y);
+            let result = [[startX, startY]];
+            console.log(`压缩路径: 第一点坐标 (${path[0].x}, ${path[0].y}) => (${result[0][0]}, ${result[0][1]})`);
+
+            // 检查是否是长直线（超过127像素）
+            if (path.length === 2) {
+                const endX = Math.round(path[1].x);
+                const endY = Math.round(path[1].y);
+                const dx = endX - startX;
+                const dy = endY - startY;
+
+                // 如果是长直线，需要将其分段处理
+                if (Math.abs(dx) > 127 || Math.abs(dy) > 127) {
+                    console.log(`检测到长直线: 起点(${startX}, ${startY})，终点(${endX}, ${endY})，偏移(${dx}, ${dy})`);
+
+                    // 计算分段数量
+                    const segments = Math.max(
+                        Math.ceil(Math.abs(dx) / 120), // 用120而不是127，留一些余量
+                        Math.ceil(Math.abs(dy) / 120)
+                    );
+
+                    console.log(`将直线分为${segments}段`);
+
+                    // 均匀分布点
+                    for (let i = 1; i <= segments; i++) {
+                        const t = i / segments;
+                        const midX = Math.round(startX + dx * t);
+                        const midY = Math.round(startY + dy * t);
+
+                        // 添加相对于前一点的坐标
+                        const prevX = i === 1 ? startX : Math.round(startX + dx * ((i - 1) / segments));
+                        const prevY = i === 1 ? startY : Math.round(startY + dy * ((i - 1) / segments));
+
+                        const segDx = midX - prevX;
+                        const segDy = midY - prevY;
+
+                        result.push([segDx, segDy]);
+                        console.log(`分段${i}: 添加点(${midX}, ${midY})，相对偏移(${segDx}, ${segDy})`);
+                    }
+
+                    return result;
+                }
+            }
+
+            // 常规处理：后续点使用与前一点的相对位置
+            for (let i = 1; i < path.length; i++) {
+                let dx = Math.round(path[i].x - path[i - 1].x);
+                let dy = Math.round(path[i].y - path[i - 1].y);
+
+                // 限制在有效范围内
+                if (dx < -127) dx = -127;
+                if (dx > 127) dx = 127;
+                if (dy < -127) dy = -127;
+                if (dy > 127) dy = 127;
+
+                result.push([dx, dy]);
+                console.log(`第${i + 1}点: 原坐标(${path[i].x}, ${path[i].y}) => 相对偏移(${dx}, ${dy})`);
+            }
+
+            return result;
+        }
+
+        // 使用自定义二进制格式压缩数据
+        function compressToBinary(data) {
+            // 首先将数据结构简化为更紧凑的格式
+            let result = '';
+
+            // 添加路径数量 (最大255条路径)
+            result += String.fromCharCode(data.p.length);
+            console.log(`编码路径数量: ${data.p.length}`);
+
+            // 添加每条路径
+            for (let path of data.p) {
+                // 路径点数量 (最大255个点)
+                result += String.fromCharCode(path.length);
+                console.log(`编码路径点数量: ${path.length}`);
+
+                for (let i = 0; i < path.length; i++) {
+                    const point = path[i];
+                    if (i === 0) {
+                        // 首个点使用绝对坐标，除以2压缩范围 (假设画布大小500x500)
+                        // 使用8位整数表示位置 (0-255)，可以表示画布的0-510位置
+                        const x = Math.min(255, Math.max(0, Math.round(point[0] / 2)));
+                        const y = Math.min(255, Math.max(0, Math.round(point[1] / 2)));
+                        result += String.fromCharCode(x) + String.fromCharCode(y);
+
+                        // 调试信息：原始值和压缩值
+                        console.log(`二进制压缩：原始坐标(${point[0]}, ${point[1]}) => 编码值(${x}, ${y}) => 解码后(${x * 2}, ${y * 2})`);
+                    } else {
+                        // 后续点使用相对坐标
+                        // 确保相对坐标在-127到127范围内
+                        let dx = point[0];
+                        let dy = point[1];
+
+                        // 这里不再需要进一步限制，因为compressPath已经确保值在-127到127范围内
+
+                        // 转换为无符号值(0-255)
+                        const dxEncoded = (dx + 128) & 0xFF;
+                        const dyEncoded = (dy + 128) & 0xFF;
+
+                        result += String.fromCharCode(dxEncoded) + String.fromCharCode(dyEncoded);
+
+                        // 调试信息
+                        console.log(`相对坐标: (${point[0]}, ${point[1]}) => 编码值(${dxEncoded}, ${dyEncoded}) => 解码后(${dxEncoded - 128}, ${dyEncoded - 128})`);
+                    }
+                }
+            }
+
+            // 添加独立点数量
+            const dotCount = data.d.length;
+            result += String.fromCharCode(dotCount);
+            console.log(`编码独立点数量: ${dotCount}`);
+
+            // 只有在有独立点时才添加点数据
+            if (dotCount > 0) {
+                console.log(`开始编码${dotCount}个独立点`);
+                // 添加每个独立点
+                for (let dot of data.d) {
+                    // 点坐标，同样除以2压缩范围
+                    const x = Math.min(255, Math.max(0, Math.round(dot[0] / 2)));
+                    const y = Math.min(255, Math.max(0, Math.round(dot[1] / 2)));
+                    result += String.fromCharCode(x) + String.fromCharCode(y);
+                    console.log(`编码独立点: 原坐标(${dot[0]}, ${dot[1]}) => 编码值(${x}, ${y})`);
+                }
+            }
+
+            // 返回 base64 编码的结果
+            console.log(`二进制压缩总长度: ${result.length} 字符`);
+            return btoa(result);
+        }
+
+        // 提供替代方案
+        function offerAlternatives() {
+            console.log("🔄 您可以：");
+            console.log("1. 减少路径数量或路径点数量");
+            console.log("2. 尝试使用更简单的绘图");
+            console.log("3. 使用云端存储 (如 Imgur、Gist 等)");
+        }
+
+        // 辅助函数：将 Uint8Array 转换为 base64
+        function arrayToBase64(array) {
+            let binary = '';
+            const len = array.length;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(array[i]);
+            }
+            return btoa(binary);
+        }
+
+        function touchStarted() {
+            // 只在沒有點時才開始新線
+            if (currentPath.length === 0) {
+                currentPath.push(createVector(mouseX, mouseY));
+            }
+            return true; // 允許事件冒泡，讓下方按鈕可點擊
+        }
+
+        function touchEnded() {
+            // 直接呼叫 mouseReleased 的內容
+            if (currentPath.length > 1) {
+                let totalLength = calculatePathLength(currentPath);
+                let totalAngle = calculateTotalAngle(currentPath);
+
+                if (totalLength < 20) {
+                    // 確保點在畫布範圍內(500x500)
+                    let pt = currentPath[0].copy();
+                    if (pt.x >= 0 && pt.x <= 500 && pt.y >= 0 && pt.y <= 500) {
+                        singlePoints.push(pt);
+                        // 新增：限制 singlePoints 最多 40 個
+                        if (singlePoints.length > 40) {
+                            singlePoints.shift();
+                        }
+                        console.log(`添加獨立點: (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+                    } else {
+                        console.log(`忽略畫布範圍外的點: (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+                    }
+                } else {
+                    let minPoints = 2;
+                    let dynamicMax = floor(map(totalLength, 20, 500, 4, 12));
+                    let maxPoints = constrain(dynamicMax, minPoints, 12);
+                    let lengthFactor = map(totalLength, 20, 500, 0, 1);
+                    let angleFactor = map(totalAngle, 0, 720, 0, 1);
+                    let blend = lengthFactor * 0.5 + angleFactor * 0.5;
+                    let mappedCount = round(map(blend, 0, 1, minPoints, maxPoints));
+                    let pointCount = constrain(mappedCount, minPoints, maxPoints);
+                    let simplified = resamplePath(currentPath, pointCount);
+                    allPaths.push(simplified);
+                    // 新增：限制 allPaths 最多 30 條
+                    if (allPaths.length > 30) {
+                        allPaths.shift();
+                    }
+                }
+            }
+            currentPath = [];
+            return true; // 允許事件冒泡，讓下方按鈕可點擊
+        }
+
+    </script>
+
+    <style>
+        :root {
+            --primary-color: #313131;
+            --success-color: #E25200;
+            --failed-color: #53D060;
+            --background-color: #313131;
+            --container-bg: #212121;
+            --text-color: #000000;
+            --text-color2: #ffffff;
+            --border-color: #000000;
+            --shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+            --border-radius: 10px;
+            --spacing: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            padding: 25px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1;
+        }
+
+        .container {
+            width: 100%;
+            max-width: calc(100vw - 100px);
+            background-color: transparent;
+            padding: calc(var(--spacing) * 1.1);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: var(--spacing);
+            background-image: linear-gradient(rgba(255, 140, 0, 0.4), rgba(255, 255, 255, 0.6)), url('banner.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            max-width: 500px;
+            max-height: 500px;
+        
+        }
+
+        h2 {
+            color: var(--text-color);
+            margin-bottom: calc(var(--spacing) / 4);
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        #canvas-container {
+            width: 100%;
+            max-width: calc(100vw - 100px);
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            margin-bottom: 30px;
+            max-width: 500px;
+            max-height: 500px;
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: var(--spacing);
+            width: 100% !important;
+            height: auto !important;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: contain;
+            display: block;
+            max-width: 500px !important;
+            max-height: 500px !important;
+        }
+
+        .help-text {
+            margin: var(--spacing) 0;
+            color: #000000;
+            font-size: 0.8rem;
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.2;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .button-container {
+            margin: var(--spacing) 0;
+            display: flex;
+            gap: calc(var(--spacing) / 2);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            padding: 8px 15px;
+            background-color: var(--primary-color) !important;
+            color: white;
+            border: none;
+            border-radius: calc(var(--border-radius) / 2);
+            cursor: pointer;
+            font-size: 0.6rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.success {
+            background-color: var(--success-color) !important;
+            color: #fff !important;
+        }
+
+        .button.failed {
+            background-color: var(--failed-color) !important;
+            color: #fff !important;
+        }
+
+        .link-container {
+            margin-top: calc(var(--spacing) / 4);
+            width: 100%;
+        }
+
+        .generated-link {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: calc(var(--border-radius) / 2);
+            background-color: #535353;
+            font-size: 0.4rem;
+            color: var(--text-color2);
+            word-break: break-all;
+            display: none;
+            margin-top: calc(var(--spacing) / 4);
+            font-family: monospace;
+        }
+
+        .copy-see-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: calc(var(--spacing) / 4);
+            justify-content: center;
+        }
+
+        .copy-button {
+            background-color: var(--success-color);
+            margin-top: calc(var(--spacing) / 4);
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            :root {
+                --spacing: 15px;
+            }
+
+            body {
+                padding: 30px;
+            }
+
+            .container {
+                max-width: calc(100vw - 100px);
+            }
+
+            #canvas-container {
+                max-width: calc(100vw - 100px);
+            }
+
+            .button {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .button-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+    <div class="container">
+        <h2>Polypaths Drawing Mode</h3>
+
+        <div class="button-container">
+            <button class="button" onclick="generateURLFromData()">Generate Data</button>
+            <button class="button" onclick="clearCanvas()">Clear</button>
+            <!-- <button class="button" id="save-image">Save paths</button> -->
+        </div>
+
+        <div class="link-container">
+            <div id="generated-link" class="generated-link"></div>
+            <div class="copy-see-group">
+                <button id="copy-button" class="button copy-button" onclick="copyToClipboard()">Copy Link</button>
+                <button id="see-button" class="button copy-button" style="display:none;">To See</button>
+                <button id="push-button" class="button copy-button" style="display:none;">Push</button>
+            </div>
+        </div>
+
+        <div class="help-text">
+            <p>Hold the mouse to draw paths & click to add points</p>
+        </div>
+    </div>
+
+    <script>
+
+
+        function clearCanvas() {
+            currentPath = [];
+            allPaths = [];
+            singlePoints = [];
+            document.getElementById('generated-link').innerText = '';
+            document.getElementById('generated-link').style.display = 'none';
+            document.getElementById('copy-button').style.display = 'none';
+            document.getElementById('see-button').style.display = 'none';
+            document.getElementById('push-button').style.display = 'none';
+            window.lastGeneratedURL = '';
+        }
+
+        function copyToClipboard() {
+            const linkText = window.lastGeneratedURL || document.getElementById('generated-link').innerText;
+            navigator.clipboard.writeText(linkText).then(() => {
+                const copyButton = document.getElementById('copy-button');
+                copyButton.textContent = 'Copied!';
+                copyButton.classList.add('success');
+                setTimeout(() => {
+                    copyButton.textContent = 'Copy Link';
+                    copyButton.classList.remove('success');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy link. Please copy manually.');
+            });
+        }
+
+    </script>
+
+</body>
+
+</html>
