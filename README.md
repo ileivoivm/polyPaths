@@ -8,7 +8,22 @@ This folder contains the build output generated automatically. **Do not edit fil
 - The root URL ([http://localhost:8080/](http://localhost:8080/)) receives a hash value and generates the artwork in `index.html`.
 - The hash in the URL encodes the drawing data and parameters, allowing you to share or reproduce a specific work.
 
+## URL Parameters
 
+- `&pix_1.5` - Adjust resolution to 1.5x of the original (adjustable range: 1.0 ~ 5.0)
+- `&debug_123456` - Development mode, each number represents different functions:
+  - `debug_1` - Display flowering angles
+  - `debug_14` - Show flowering angles and all-black coloring
+  - Feel free to combine different numbers for testing
+- `&sp_1` - Generate Chamomile (Artist's favorite flower)
+- `&sp_2` - Generate Myristica (Taiwan endemic species)
+- `&3d` - Enable animation mode
+
+## Keyboard Shortcuts
+
+- `Enter` - Export complete image
+- `Space` - Export plant data as .json file
+- `G` - Save plant layer slices
 
 ---
 
