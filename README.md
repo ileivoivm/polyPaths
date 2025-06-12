@@ -2,11 +2,6 @@
 
 This folder contains the build output generated automatically. **Do not edit files here manually.**
 
-## Usage
-
-- **Main interface entry:** `/hash/` (e.g. [http://localhost:8080/hash/](http://localhost:8080/hash/))
-- The root URL ([http://localhost:8080/](http://localhost:8080/)) receives a hash value and generates the artwork in `index.html`.
-- The hash in the URL encodes the drawing data and parameters, allowing you to share or reproduce a specific work.
 
 ## URL Parameters
 
