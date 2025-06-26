@@ -10,9 +10,11 @@ This folder contains the build output generated automatically. **Do not edit fil
   - `debug_1` - Display flowering angles
   - `debug_14` - Show flowering angles and all-black coloring
   - Feel free to combine different numbers for testing
-- `&sp_1` - Generate Chamomile (Artist's favorite flower)
-- `&sp_2` - Generate Myristica (Taiwan endemic species)
+- `&sp1` - Generate Chamomile (Artist's favorite flower)
+- `&sp2` - Generate Myristica (Taiwan endemic species)
 - `&3d` - Enable animation mode
+- `hires` - hight resoultion
+- `machine` - verse snapshot
 
 ## Keyboard Shortcuts
 
