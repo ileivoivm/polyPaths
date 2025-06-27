@@ -13,8 +13,8 @@ This folder contains the build output generated automatically. **Do not edit fil
 - `&sp1` - Generate Chamomile (Artist's favorite flower)
 - `&sp2` - Generate Myristica (Taiwan endemic species)
 - `&3d` - Enable animation mode
-- `hires` - hight resoultion
-- `machine` - verse snapshot
+- `?hires` - hight resoultion
+- `?machine` - verse snapshot
 
 ## Keyboard Shortcuts
 
